@@ -52,7 +52,7 @@ def create_entry(payload: EntryPayload) -> ActionResult:
 def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     """对单条超限箱执行确认超限、安排作业、确认装机；不允许的动作会被拦下并说明原因。"""
     action = str(payload.values.get("action") or "").strip()
-    entry, message = service.run_action(entry_id, action)
+    entry, message = service.run_action(entry_id, action, payload.values)
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)

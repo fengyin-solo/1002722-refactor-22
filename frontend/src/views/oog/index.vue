@@ -3,7 +3,7 @@
     <header class="page-head">
       <div>
         <h2>超限箱管理管理</h2>
-        <p class="page-desc">维护超限箱，围绕超限箱号、箱型尺寸、超限方向、超限尺寸做登记、筛选与状态流转。</p>
+        <p class="page-desc">维护超限箱，围绕超限箱号、箱型尺寸、超限方向、超限尺寸做登记、筛选与状态流转；超限尺寸与专用吊具按统一口径判定，现场实测尺寸优先。</p>
       </div>
       <div class="page-actions">
         <button class="btn primary" type="button" @click="openCreate">登记超限箱</button>
@@ -63,7 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import { request } from '@/api/client'
 
@@ -73,13 +73,20 @@ const ENDPOINT = '/api/oog'
 const columns = ["超限箱号", "箱型尺寸", "超限方向", "超限尺寸", "专用吊具", "堆放区域", "绑扎方案", "超限状态"]
 const actions = ["确认超限", "安排作业", "确认装机"]
 const statuses = ["待确认", "已确认", "作业中", "已装机"]
-const stats = [{"label": "待确认超限", "value": 0}, {"label": "作业中超限", "value": 0}, {"label": "已装机超限", "value": 0}]
 
 const rows = ref<Row[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+
+// 看板数字一律随当前明细重算，不再写死。
+const countByStatus = (status: string) => rows.value.filter((row) => row.status === status).length
+const stats = computed(() => [
+  {"label": "待确认超限", "value": countByStatus("待确认")},
+  {"label": "作业中超限", "value": countByStatus("作业中")},
+  {"label": "已装机超限", "value": countByStatus("已装机")},
+])
 
 function resetFilters() {
   filters.value = {}
