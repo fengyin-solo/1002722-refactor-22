@@ -63,23 +63,36 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import { request } from '@/api/client'
 
 type Row = Record<string, string | number | null>
 
 const ENDPOINT = '/api/oog'
-const columns = ["超限箱号", "箱型尺寸", "超限方向", "超限尺寸", "专用吊具", "堆放区域", "绑扎方案", "超限状态"]
+const columns = ["超限箱号", "箱型尺寸", "超限方向", "超限尺寸", "专用吊具", "堆放区域", "绑扎方案", "超限状态", "判定依据"]
 const actions = ["确认超限", "安排作业", "确认装机"]
-const statuses = ["待确认", "已确认", "作业中", "已装机"]
-const stats = [{"label": "待确认超限", "value": 0}, {"label": "作业中超限", "value": 0}, {"label": "已装机超限", "value": 0}]
 
 const rows = ref<Row[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
-const filterFields = columns.slice(0, 3)
+const filterFields = ["超限箱号", "箱型尺寸", "超限方向"]
+
+// 作业看板：超限箱数不从静态配置读，统一由明细实时重算。判定超限=明细里
+// 判为一般/严重超限的箱子；其余三张卡片按作业状态统计，与列表完全同源。
+const stats = computed(() => {
+  const oversize = allRows.value.filter((row) => row['超限状态'] === '一般超限' || row['超限状态'] === '严重超限').length
+  const countByStatus = (status: string) => allRows.value.filter((row) => row.status === status).length
+  return [
+    { label: '判定超限', value: oversize },
+    { label: '待确认超限', value: countByStatus('待确认') },
+    { label: '作业中超限', value: countByStatus('作业中') },
+    { label: '已装机超限', value: countByStatus('已装机') },
+  ]
+})
+// 统计口径用全量明细：列表页有分页，单独拉一份 size=200（接口允许上限）做看板重算。
+const allRows = ref<Row[]>([])
 
 function resetFilters() {
   filters.value = {}
@@ -113,17 +126,20 @@ async function runAction(action: string, row: Row) {
 async function reload() {
   errorMessage.value = ''
   const query = new URLSearchParams(filters.value as Record<string, string>).toString()
-  try {
-    const response = await request(`${ENDPOINT}?${query}`)
-    if (!response.ok) {
-      throw new Error('超限箱列表读取失败')
-    }
-    const payload = await response.json()
-    rows.value = payload.items ?? []
-    total.value = payload.total ?? rows.value.length
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '超限箱管理列表读取失败'
+  // 看板统计与页面明细并行拉取，结论都来自后端同一份判据。
+  const [filtered, all] = await Promise.all([
+    request(`${ENDPOINT}?${query}`),
+    request(`${ENDPOINT}?page=1&size=200`),
+  ])
+  if (!filtered.ok || !all.ok) {
+    errorMessage.value = '超限箱列表读取失败'
+    return
   }
+  const payload = await filtered.json()
+  const overviewPayload = await all.json()
+  rows.value = payload.items ?? []
+  total.value = payload.total ?? rows.value.length
+  allRows.value = overviewPayload.items ?? []
 }
 
 onMounted(reload)

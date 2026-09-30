@@ -14,6 +14,11 @@ class Store:
         self._tables: dict[str, list[dict[str, Any]]] = {
             name: [dict(row) for row in rows] for name, rows in SEED_ROWS.items()
         }
+        # 超限箱历史数据按统一判据归一：标准变更后启动即重算，缺失的堆放区域、
+        # 绑扎方案按统一方式补齐，保证看板汇总与明细同源。
+        from app.services import oog_rules
+
+        oog_rules.recompute_all(self.rows("oog"))
 
     def module_names(self) -> list[str]:
         return sorted(self._tables)
